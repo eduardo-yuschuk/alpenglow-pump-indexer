@@ -62,3 +62,27 @@ Add a block_time column to calculate the latency between when the block is produ
 ## 2026-11-02 10:17:17 (UTC-03:00)
 
 Commit and push everything to main.
+
+## 2026-11-02 10:19:04 (UTC-03:00)
+
+Create the table in the database and connect the block-saver so it stores the blocks.
+
+## 2026-11-02 10:30:50 (UTC-03:00)
+
+Add the delay between block time and received_at as a field in the console log.
+
+## 2026-11-02 10:32:55 (UTC-03:00)
+
+This is horrible: `RETURNING EXTRACT(EPOCH FROM received_at - block_time)::float8`. Better use the current UTC+0 time to compare. Adding that complexity to get the latency is too much.
+
+## 2026-11-02 10:34:12 (UTC-03:00)
+
+Keep the last inserted slot so we do not send to the db blocks we already know are duplicates.
+
+## 2026-11-02 10:43:05 (UTC-03:00)
+
+If a block is skipped because it is repeated, I do not want to see it in the log.
+
+## 2026-11-02 10:43:58 (UTC-03:00)
+
+Commit and push everything to main.
