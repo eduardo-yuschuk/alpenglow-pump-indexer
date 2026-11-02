@@ -31,3 +31,22 @@ Write a README.md with the command to run the block-saver.
 ## 2026-11-02 09:40:34 (UTC-03:00)
 
 Commit and push to main.
+
+## 2026-11-02 09:41:44 (UTC-03:00)
+
+Implement reconnection with exponential backoff.
+
+## 2026-11-02 09:45:02 (UTC-03:00)
+
+This is wrong:
+/// A finalized block arrives every ~400ms; silence this long means a dead connection.
+
+Blocks arrive roughly every 200 ms.
+
+## 2026-11-02 09:46:10 (UTC-03:00)
+
+How is `_ = tokio::signal::ctrl_c() => Ok(())` handling Ctrl+C in the terminal?
+
+## 2026-11-02 09:52:06 (UTC-03:00)
+
+Commit and push to main.

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result, bail};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -9,6 +11,12 @@ use tokio_tungstenite::{
 /// Full blocks can be several MB; raise tungstenite's default limits.
 const MAX_MESSAGE_SIZE: usize = 256 << 20;
 
+const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
+const MAX_BACKOFF: Duration = Duration::from_secs(30);
+
+/// A finalized block arrives every ~200ms; silence this long means a dead connection.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
@@ -17,10 +25,28 @@ async fn main() -> Result<()> {
         .expect("rustls crypto provider already installed");
     let wss_url = std::env::var("WSS_URL").context("WSS_URL is not set")?;
 
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => Ok(()),
+        _ = run_forever(&wss_url) => unreachable!(),
+    }
+}
+
+async fn run_forever(wss_url: &str) {
+    let mut backoff = INITIAL_BACKOFF;
+    loop {
+        let err = run_session(wss_url, &mut backoff).await.unwrap_err();
+        eprintln!("session ended: {err:#}; reconnecting in {backoff:?}");
+        tokio::time::sleep(backoff).await;
+        backoff = (backoff * 2).min(MAX_BACKOFF);
+    }
+}
+
+/// Runs one websocket session until it fails. Resets `backoff` once the subscription is confirmed.
+async fn run_session(wss_url: &str, backoff: &mut Duration) -> Result<()> {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_MESSAGE_SIZE))
         .max_frame_size(Some(MAX_MESSAGE_SIZE));
-    let (ws, _) = connect_async_with_config(wss_url.as_str(), Some(config), false)
+    let (ws, _) = connect_async_with_config(wss_url, Some(config), false)
         .await
         .context("websocket connect failed")?;
     let (mut write, mut read) = ws.split();
@@ -43,24 +69,25 @@ async fn main() -> Result<()> {
     write.send(Message::text(subscribe.to_string())).await?;
 
     loop {
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => break,
-            msg = read.next() => {
-                let Some(msg) = msg else { bail!("websocket closed by server") };
-                match msg? {
-                    Message::Text(text) => handle_message(&text)?,
-                    Message::Ping(payload) => write.send(Message::Pong(payload)).await?,
-                    Message::Close(frame) => bail!("websocket closed: {frame:?}"),
-                    _ => {}
+        let msg = tokio::time::timeout(READ_TIMEOUT, read.next())
+            .await
+            .context("no message received within read timeout")?;
+        let Some(msg) = msg else { bail!("websocket closed by server") };
+        match msg? {
+            Message::Text(text) => {
+                if handle_message(&text)? {
+                    *backoff = INITIAL_BACKOFF;
                 }
             }
+            Message::Ping(payload) => write.send(Message::Pong(payload)).await?,
+            Message::Close(frame) => bail!("websocket closed: {frame:?}"),
+            _ => {}
         }
     }
-
-    Ok(())
 }
 
-fn handle_message(text: &str) -> Result<()> {
+/// Returns `true` when the message confirms the subscription.
+fn handle_message(text: &str) -> Result<bool> {
     let msg: Value = serde_json::from_str(text)?;
 
     if let Some(err) = msg.get("error") {
@@ -68,10 +95,10 @@ fn handle_message(text: &str) -> Result<()> {
     }
     if let Some(id) = msg.get("result").filter(|_| msg.get("id").is_some()) {
         println!("subscribed, subscription id {id}");
-        return Ok(());
+        return Ok(true);
     }
     if msg["method"] != "blockNotification" {
-        return Ok(());
+        return Ok(false);
     }
 
     let value = &msg["params"]["result"]["value"];
@@ -83,5 +110,5 @@ fn handle_message(text: &str) -> Result<()> {
         Some(t) => println!("{received} slot={slot} block_time={t}"),
         None => println!("{received} slot={slot} block_time=none err={}", value["err"]),
     }
-    Ok(())
+    Ok(false)
 }
