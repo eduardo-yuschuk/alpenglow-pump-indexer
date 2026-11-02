@@ -50,3 +50,15 @@ How is `_ = tokio::signal::ctrl_c() => Ok(())` handling Ctrl+C in the terminal?
 ## 2026-11-02 09:52:06 (UTC-03:00)
 
 Commit and push to main.
+
+## 2026-11-02 10:12:25 (UTC-03:00)
+
+Define a table (blocks) to store in PostgreSQL (POSTGRES_URL in .env) to store whole blocks organized by slot, in a format not susceptible to special characters, and considering that blocks will remain in the table only a few minutes. The place for schemas is the sql folder.
+
+## 2026-11-02 10:16:11 (UTC-03:00)
+
+Add a block_time column to calculate the latency between when the block is produced on the blockchain and when we store it in our database.
+
+## 2026-11-02 10:17:17 (UTC-03:00)
+
+Commit and push everything to main.
