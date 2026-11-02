@@ -86,3 +86,24 @@ If a block is skipped because it is repeated, I do not want to see it in the log
 ## 2026-11-02 10:43:58 (UTC-03:00)
 
 Commit and push everything to main.
+
+## 2026-11-02 11:00:52 (UTC-03:00)
+
+Let's start with the block-verifier. Its responsibility is to run independently of the other services, read the blocks from the blocks table and set a verified_at on each block that respects slot sequentiality. We are not interested in hashes because the blocks are finalized, they are all part of the main chain.
+If it finds the table empty, it does nothing.
+If it finds a single block, it sets verified_at on it because it is the first one.
+If it detects a gap between two blocks, it requests it via RPC (RPC_URL in .env) and inserts it into blocks with recovered_at and verified_at.
+If no block exists for a slot, it is inserted anyway but without data (data can be NULL) and with recovered_at and verified_at.
+Is there any case I am missing?
+
+## 2026-11-02 11:02:46 (UTC-03:00)
+
+Ask me all the questions interactively.
+
+## 2026-11-02 11:10:55 (UTC-03:00)
+
+Record the decisions we made in docs/BLOCK_VERIFIER.md and start with the implementation.
+
+## 2026-11-02 12:22:34 (UTC-03:00)
+
+Commit and push everything to main.
